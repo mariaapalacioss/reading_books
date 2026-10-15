@@ -41,6 +41,10 @@ export function SearchPage() {
     setResults([]);
     try {
       if (mode === "semantic") {
+        if (import.meta.env.VITE_ALLOW_SERVER_OPENAI !== "true") {
+          setMessage("La búsqueda semántica requiere embeddings del servidor. Usa búsqueda por texto o activa VITE_ALLOW_SERVER_OPENAI en despliegues propios.");
+          return;
+        }
         const data = await invokeFunction<{ results: { chunkId: string; bookId: string; title: string; pdfPage: number; snippet: string }[] }>("semantic-search", {
           query: term,
           bookId: scope === "library" ? null : bookId || null,

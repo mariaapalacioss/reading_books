@@ -17,6 +17,9 @@ export function Brand() {
 
 export function TopBar({ name }: { name?: string }) {
   const plan = useChatGptPlan();
+  const signOut = () => {
+    void plan.disconnect().finally(() => void supabase?.auth.signOut());
+  };
   return (
     <header className="topbar">
       <Brand />
@@ -33,7 +36,7 @@ export function TopBar({ name }: { name?: string }) {
         {name ? <span className="muted">{name}</span> : null}
         <ThemeSwitch />
         {supabase ? (
-          <button className="btn-ghost" type="button" onClick={() => void supabase?.auth.signOut()}>Salir</button>
+          <button className="btn-ghost" type="button" onClick={signOut}>Salir</button>
         ) : null}
       </div>
     </header>

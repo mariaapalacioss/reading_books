@@ -11,7 +11,10 @@ export function ChatGptConnect({ variant = "panel" }: Props) {
   if (plan.connected && plan.model) {
     return (
       <div className={`chatgpt-status${variant === "hero" ? " hero" : ""}`}>
-        <span className="chip teal">ChatGPT Plus conectado · {plan.model}</span>
+        <span className="chip teal">
+          Tu Plus · {plan.credentials?.email ?? plan.model}
+          {plan.model ? ` · ${plan.model}` : ""}
+        </span>
         <button className="btn-ghost" type="button" onClick={() => void plan.disconnect()}>Desconectar</button>
       </div>
     );
@@ -37,7 +40,10 @@ export function ChatGptConnect({ variant = "panel" }: Props) {
         {plan.loading ? "Conectando…" : "Continuar con ChatGPT"}
       </button>
       {variant === "hero" ? (
-        <p className="muted">Usa tu suscripción Plus (Sign in with ChatGPT). Sin API key de pago.</p>
+        <p className="muted">
+          Cada cuenta de Smart Books conecta su propio ChatGPT (Plus/Go/Pro cuando el plan lo permita).
+          Sign in with ChatGPT oficial: tus libros y tu uso de IA no se comparten con otros usuarios.
+        </p>
       ) : null}
     </div>
   );

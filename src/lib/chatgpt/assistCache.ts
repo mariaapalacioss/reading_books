@@ -39,3 +39,8 @@ export function clearAssistCacheForBook(bookId: string) {
     if (key.includes(`bookId=${bookId}`)) memory.delete(key);
   }
 }
+
+export function clearAssistCacheAll() {
+  memory.clear();
+  inflight.clear();
+}

@@ -35,6 +35,7 @@ export async function ensureAccessToken(): Promise<string> {
         hostId: fresh.ext_agent_host_id,
         email: fresh.email,
         subject: fresh.subject,
+        smartbooksUserId: fresh.smartbooks_user_id,
       });
       await saveCredentials(next);
       return next;

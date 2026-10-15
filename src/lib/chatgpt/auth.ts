@@ -6,6 +6,7 @@ import {
 } from "./constants";
 import { bridgeHealthy, exchangeAuthorizationCode } from "./bridge";
 import { credentialsFromTokenResponse, loadCredentials, saveCredentials } from "./credentials";
+import { requireSmartBooksUserId } from "./sessionUser";
 import { getOrCreateHostId } from "./hostId";
 import { createPkce, randomState } from "./pkce";
 import { resetPreferredModel } from "./planApi";
@@ -17,6 +18,7 @@ type PendingOAuth = {
   verifier: string;
   clientId: string;
   hostId: string;
+  smartbooksUserId: string;
 };
 
 function decodeJwtPayload(token: string) {
@@ -51,13 +53,14 @@ export async function signInWithChatGpt(): Promise<void> {
     );
   }
 
-  const existing = await loadCredentials();
+  const smartbooksUserId = await requireSmartBooksUserId();
+  const existing = await loadCredentials(smartbooksUserId);
   const hostId = getOrCreateHostId();
   const { verifier, challenge } = await createPkce();
   const state = randomState();
   const clientId = existing?.client_id || "dynamic_agent_client";
 
-  savePending({ state, verifier, clientId, hostId });
+  savePending({ state, verifier, clientId, hostId, smartbooksUserId });
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -119,12 +122,13 @@ async function finishOAuth(state: string, code: string, issuedClientId: string) 
     hostId: pending.hostId,
     email: claims?.email ?? null,
     subject: claims?.sub ?? null,
+    smartbooksUserId: pending.smartbooksUserId,
   });
-  await saveCredentials(record);
+  await saveCredentials(record, pending.smartbooksUserId);
 }
 
-export async function signOutChatGpt() {
+export async function signOutChatGpt(userId?: string | null) {
   const { clearCredentials } = await import("./credentials");
-  await clearCredentials();
+  await clearCredentials(userId ?? undefined);
   resetPreferredModel();
 }

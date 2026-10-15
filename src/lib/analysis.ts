@@ -11,13 +11,19 @@ async function analyzeChapter(book: Book, chapter: Chapter) {
     await analyzeChapterWithPlan(book, chapter.id);
     return;
   }
-  const result = await invokeFunction<{ skipped?: boolean; reason?: string }>("analyze-chapter", {
-    bookId: book.id,
-    chapterId: chapter.id,
-  });
-  if (result.skipped && result.reason === "already_running") {
-    await waitForChapter(chapter.id);
+  if (import.meta.env.VITE_ALLOW_SERVER_OPENAI === "true") {
+    const result = await invokeFunction<{ skipped?: boolean; reason?: string }>("analyze-chapter", {
+      bookId: book.id,
+      chapterId: chapter.id,
+    });
+    if (result.skipped && result.reason === "already_running") {
+      await waitForChapter(chapter.id);
+    }
+    return;
   }
+  throw new Error(
+    "Conecta tu ChatGPT Plus con «Continuar con ChatGPT» para analizar capítulos con tu plan (Sign in with ChatGPT).",
+  );
 }
 
 export type AnalysisEvent = {
@@ -161,6 +167,7 @@ async function runReadyChapters(book: Book) {
 }
 
 async function embedAll(bookId: string) {
+  if (import.meta.env.VITE_ALLOW_SERVER_OPENAI !== "true") return;
   if (await planAiReady()) return;
   try {
     for (let attempt = 0; attempt < 80; attempt += 1) {
