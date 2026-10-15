@@ -5,6 +5,7 @@ import { hasPlanUsage, loadCredentials, setCredentialUserId, type ChatGptCredent
 import { getPreferredModel, resetPreferredModel } from "./planApi";
 import { clearAssistCacheAll } from "./assistCache";
 import { signInWithChatGpt, signOutChatGpt } from "./auth";
+import { isPublicWebDeploy } from "./environment";
 
 type ChatGptPlanContextValue = {
   credentials: ChatGptCredentials | null;
@@ -42,7 +43,11 @@ export function ChatGptPlanProvider({ children }: { children: ReactNode }) {
   }, [userId]);
 
   const refresh = useCallback(async () => {
-    setBridgeOk(await bridgeHealthy());
+    if (isPublicWebDeploy()) {
+      setBridgeOk(null);
+    } else {
+      setBridgeOk(await bridgeHealthy());
+    }
     if (!userId) {
       setCredentials(null);
       setModel(null);

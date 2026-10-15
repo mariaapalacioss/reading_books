@@ -54,10 +54,8 @@ export function AuthPage() {
   return (
     <AuthShell
       title="Bienvenida de vuelta"
-      subtitle="Conecta ChatGPT Plus y accede a tu biblioteca privada de estudio."
+      subtitle="Entra a tu biblioteca privada. Cada usuario tiene sus libros y datos separados."
     >
-      <ChatGptConnect variant="hero" />
-
       <div className="login-divider">Acceso a tu biblioteca</div>
 
       <form onSubmit={submit}>
@@ -99,6 +97,9 @@ export function AuthPage() {
           {busy ? "Espera…" : mode === "entrar" ? "Iniciar sesión" : "Crear cuenta"}
         </button>
       </form>
+
+      <div className="login-divider">ChatGPT Plus (opcional)</div>
+      <ChatGptConnect variant="hero" placement="login" />
     </AuthShell>
   );
 }

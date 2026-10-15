@@ -353,6 +353,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand-purple); b
 }
 .btn.chatgpt-signin.hero:disabled { opacity: .55; }
 .chatgpt-connect.hero .callout { font-size: .88rem; }
+.chatgpt-hosted-hint {
+  font-size: .9rem;
+  line-height: 1.5;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--brand-teal) 35%, var(--border));
+  background: color-mix(in srgb, var(--surface) 92%, var(--brand-teal) 8%);
+}
 
 .assist-panel { gap: 10px; }
 .assist-status {
