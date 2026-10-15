@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6222e0" />
+    <title>Smart Books by Bookifi</title>
+    <link rel="icon" href="%BASE_URL%brand/logo-bookifi.svg" />
+    <script>
+      (function () {
+        var search = window.location.search;
+        if (search.indexOf("p=") !== -1) {
+          var params = {};
+          search.slice(1).split("&").forEach(function (part) {
+            var pair = part.split("=");
+            params[pair[0]] = decodeURIComponent((pair.slice(1).join("=") || "").replace(/~and~/g, "&"));
+          });
+          if (params.p) {
+            var path = window.location.pathname.replace(/\/$/, "");
+            window.history.replaceState(null, "", path + params.p + (params.q ? "?" + params.q : "") + window.location.hash);
+          }
+        }
+        try {
+          var preference = localStorage.getItem("margen-theme") || "system";
+          var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var theme = preference === "system" ? (systemDark ? "dark" : "light") : preference;
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.dataset.themePreference = preference;
+        } catch (error) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

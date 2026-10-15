@@ -1,0 +1,25 @@
+project_id = "margen"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+
+[functions.analyze-chapter]
+verify_jwt = true
+
+[functions.assist]
+verify_jwt = true
+
+[functions.embed-book]
+verify_jwt = true
+
+[functions.semantic-search]
+verify_jwt = true
