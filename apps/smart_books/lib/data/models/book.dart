@@ -18,6 +18,7 @@ class Book {
     this.lastReadAt,
     required this.createdAt,
     required this.updatedAt,
+    this.workspaceProfile,
   });
 
   final String id;
@@ -38,6 +39,9 @@ class Book {
   final DateTime? lastReadAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// Perfil heurístico del documento (`books.workspace_profile` en Supabase).
+  final Map<String, dynamic>? workspaceProfile;
 
   factory Book.fromJson(Map<String, dynamic> json) {
     return Book(
@@ -61,6 +65,9 @@ class Book {
           : null,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      workspaceProfile: json['workspace_profile'] is Map
+          ? Map<String, dynamic>.from(json['workspace_profile'] as Map)
+          : null,
     );
   }
 

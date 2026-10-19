@@ -11,6 +11,9 @@ import '../services/analysis_service.dart';
 import '../services/review_questions_service.dart';
 import '../services/ingest_service.dart';
 import '../services/ocr_job_service.dart';
+import '../services/document_profile_service.dart';
+import '../services/library_ask_service.dart';
+import '../services/semantic_search_service.dart';
 
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
   return Supabase.instance.client;
@@ -123,3 +126,18 @@ final repasoReloadTickProvider = StateProvider<int>((ref) => 0);
 void bumpRepasoReloadTick(WidgetRef ref) {
   ref.read(repasoReloadTickProvider.notifier).state++;
 }
+
+final semanticSearchServiceProvider = Provider<SemanticSearchService>((ref) {
+  return SemanticSearchService(ref.watch(booksRepositoryProvider));
+});
+
+final libraryAskServiceProvider = Provider<LibraryAskService>((ref) {
+  return LibraryAskService(
+    ref.watch(booksRepositoryProvider),
+    api: ref.watch(planApiProvider),
+  );
+});
+
+final documentProfileServiceProvider = Provider<DocumentProfileService>((ref) {
+  return DocumentProfileService(ref.watch(booksRepositoryProvider));
+});

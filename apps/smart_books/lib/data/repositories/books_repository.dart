@@ -564,6 +564,21 @@ class BooksRepository {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> listBookConcepts(String bookId) async {
+    try {
+      final rows = await _client
+          .from('book_concepts')
+          .select()
+          .eq('book_id', bookId)
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<Map<String, dynamic>>> listStudyCards(String bookId) async {
     final rows = await _client
         .from('study_cards')

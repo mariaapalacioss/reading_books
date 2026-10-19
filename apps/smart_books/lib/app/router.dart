@@ -5,8 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/auth/auth_page.dart';
 import '../features/chatgpt/connect_chatgpt_page.dart';
 import '../features/library/library_page.dart';
-import '../features/reader/reader_page.dart';
 import '../features/reader/reader_search_focus.dart';
+import '../features/workspace/book_practice_page.dart';
+import '../features/workspace/book_study_page.dart';
+import '../features/workspace/book_workspace_leer_shell.dart';
+import '../features/workspace/book_workspace_nav.dart';
 import '../features/review/repaso_generated_questions_page.dart';
 import '../features/review/repaso_session_page.dart';
 import '../features/review/review_page.dart';
@@ -74,12 +77,26 @@ GoRouter createRouter() {
         path: '/libro/:bookId',
         parentNavigatorKey: rootNavigatorKey,
         builder: (_, state) {
+          final bookId = state.pathParameters['bookId']!;
           final page = int.tryParse(state.uri.queryParameters['page'] ?? '');
-          return ReaderPage(
-            bookId: state.pathParameters['bookId']!,
-            initialPage: page,
-            searchFocus: ReaderSearchFocus.fromRouteExtra(state.extra),
+          final view = bookWorkspaceModeFromQuery(
+            state.uri.queryParameters['view'],
           );
+          return switch (view) {
+            BookWorkspaceMode.estudiar => BookStudyPage(
+              bookId: bookId,
+              initialPage: page,
+            ),
+            BookWorkspaceMode.practicar => BookPracticePage(
+              bookId: bookId,
+              initialPage: page,
+            ),
+            BookWorkspaceMode.leer => BookWorkspaceLeerShell(
+              bookId: bookId,
+              initialPage: page,
+              searchFocus: ReaderSearchFocus.fromRouteExtra(state.extra),
+            ),
+          };
         },
       ),
     ],

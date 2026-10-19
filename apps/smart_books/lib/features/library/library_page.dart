@@ -16,6 +16,8 @@ import '../shared/book_status_labels.dart';
 
 import '../shared/bookifi_ui.dart';
 
+import '../workspace/book_workspace_nav.dart';
+
 import 'upload_book_dialog.dart';
 
 abstract final class _LibraryColors {
@@ -1481,6 +1483,41 @@ class _LibraryList extends StatelessWidget {
 
 // ============================================================
 
+class _BookWorkspaceLinks extends StatelessWidget {
+  const _BookWorkspaceLinks({required this.bookId});
+
+  final String bookId;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    Text link(String label, BookWorkspaceMode mode) {
+      return TextButton(
+        onPressed: () => context.push(
+          bookWorkspaceLocation(bookId: bookId, mode: mode),
+        ),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: muted),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        link('Estudiar', BookWorkspaceMode.estudiar),
+        Text('·', style: TextStyle(color: muted, fontSize: 12)),
+        link('Practicar', BookWorkspaceMode.practicar),
+      ],
+    );
+  }
+}
+
 class _LibraryBookCard extends ConsumerWidget {
   const _LibraryBookCard({required this.book});
 
@@ -1582,6 +1619,10 @@ class _LibraryBookCard extends ConsumerWidget {
                       const Spacer(),
 
                       _ProgressLine(value: progress, percent: percent),
+
+                      const SizedBox(height: 6),
+
+                      _BookWorkspaceLinks(bookId: book.id),
 
                       const SizedBox(height: 9),
 
