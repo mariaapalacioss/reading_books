@@ -21,33 +21,49 @@ Future<Uint8List> optimizePdfForCloudUpload(
       throw Exception('El PDF no tiene páginas.');
     }
 
-    // Una sola pasada en la calidad más alta; no repetir rasterizado con DPI distintos
-    // (varias pasadas completas parecían un “loop” en la UI y no cambian el flujo de subida).
-    final attempt = _compressionAttempts(
+    final attempts = _compressionAttempts(
       sourceBytes: source.length,
       pageCount: pageCount,
-    ).first;
+    );
 
-    onProgress?.call(
-      'Comprimiendo PDF (${attempt.dpi.round()} DPI, página 1/$pageCount)…',
-    );
-    final built = await _buildRasterPdf(
-      doc,
-      dpi: attempt.dpi,
-      jpegQuality: attempt.quality,
-      onPage: (n, total) {
-        if (n == 1 || n == total || n % 12 == 0) {
-          onProgress?.call(
-            'Comprimiendo PDF (${attempt.dpi.round()} DPI, página $n/$total)…',
-          );
-        }
-      },
-    );
-    developer.log(
-      'PDF optimize ${attempt.dpi}dpi q=${attempt.quality} → ${built.length} bytes (target $targetBytes)',
-      name: 'pdf_storage_optimizer',
-    );
-    return built;
+    Uint8List? smallest;
+    for (var i = 0; i < attempts.length; i++) {
+      final attempt = attempts[i];
+      if (i == 0) {
+        onProgress?.call(
+          'Comprimiendo PDF (${attempt.dpi.round()} DPI, $pageCount páginas)…',
+        );
+      } else {
+        onProgress?.call(
+          'Ajustando para la nube (${attempt.dpi.round()} DPI, '
+          'paso ${i + 1}/${attempts.length})…',
+        );
+      }
+
+      final built = await _buildRasterPdf(
+        doc,
+        dpi: attempt.dpi,
+        jpegQuality: attempt.quality,
+        onPage: (n, total) {
+          if (n == 1 || n == total || n % 24 == 0) {
+            onProgress?.call('Comprimiendo… página $n/$total');
+          }
+        },
+      );
+      smallest = built;
+      developer.log(
+        'PDF optimize ${attempt.dpi}dpi q=${attempt.quality} → ${built.length} bytes (target $targetBytes)',
+        name: 'pdf_storage_optimizer',
+      );
+      if (built.length <= targetBytes) {
+        return built;
+      }
+    }
+
+    if (smallest != null) {
+      return smallest;
+    }
+    throw Exception('No se pudo comprimir el PDF.');
   } finally {
     await doc.dispose();
   }

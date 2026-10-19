@@ -7,10 +7,12 @@ import '../../core/providers.dart';
 import '../../data/models/book.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/margen_iconography.dart';
+import '../../core/ui/app_snackbar.dart';
 import '../shared/bookifi_ui.dart';
 import 'repaso_models.dart';
 import 'repaso_qa_store.dart';
 import 'repaso_questions_catalog.dart';
+import 'repaso_save_ui.dart';
 import 'repaso_session_route.dart';
 
 class RepasoSessionPage extends ConsumerStatefulWidget {
@@ -40,6 +42,7 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
   var _index = 0;
   var _showBack = false;
   var _loading = true;
+  var _markBusy = false;
   String? _error;
 
   List<RepasoFlashcard> _cards = [];
@@ -72,15 +75,15 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
         title: 'Preguntas de repaso',
         excerpt: '${_cards.length} preguntas',
       );
-      _onReviewed = () => _markCurrentReviewed();
-      _onRepasar = () => _markCurrentPending();
+      _onReviewed = null;
+      _onRepasar = null;
     } else if (widget.extra != null) {
       final e = widget.extra!;
       _cards = e.cards;
       _entry = e.entry;
       _bookId = e.bookId;
-      _onReviewed = e.onReviewed ?? () => _markCurrentReviewed();
-      _onRepasar = e.onRepasar ?? () => _markCurrentPending();
+      _onReviewed = e.onReviewed;
+      _onRepasar = e.onRepasar;
     } else {
       setState(() {
         _loading = false;
@@ -100,23 +103,67 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
     setState(() => _loading = false);
   }
 
-  Future<void> _markCurrentReviewed() async {
-    final id = _cards[_index].studyCardId;
-    if (id == null) return;
-    await ref.read(booksRepositoryProvider).patchStudyCard(id, {
-      'reviewed': true,
-      'review_again': false,
-    });
-    bumpRepasoReloadTick(ref);
+  RepasoReviewUiState get _currentReviewUi {
+    final c = _cards[_index];
+    if (c.reviewAgain) return RepasoReviewUiState.reviewAgain;
+    if (c.reviewed) return RepasoReviewUiState.reviewed;
+    return RepasoReviewUiState.pending;
   }
 
-  Future<void> _markCurrentPending() async {
+  Future<bool> _markCurrentReviewed() async {
     final id = _cards[_index].studyCardId;
-    if (id == null) return;
-    await ref.read(booksRepositoryProvider).patchStudyCard(id, {
-      'review_again': true,
-    });
-    bumpRepasoReloadTick(ref);
+    if (id == null) return false;
+    setState(() => _markBusy = true);
+    try {
+      await ref.read(booksRepositoryProvider).patchStudyCard(id, {
+        'reviewed': true,
+        'review_again': false,
+      });
+      bumpRepasoReloadTick(ref);
+      if (!mounted) return false;
+      setState(() {
+        _cards[_index] = _cards[_index].copyWithReview(
+          reviewed: true,
+          reviewAgain: false,
+        );
+      });
+      return true;
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(kRepasoSaveErrorMessage);
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _markBusy = false);
+    }
+  }
+
+  Future<bool> _markCurrentPending() async {
+    final id = _cards[_index].studyCardId;
+    if (id == null) return false;
+    setState(() => _markBusy = true);
+    try {
+      await ref.read(booksRepositoryProvider).patchStudyCard(id, {
+        'review_again': true,
+        'reviewed': false,
+      });
+      bumpRepasoReloadTick(ref);
+      if (!mounted) return false;
+      setState(() {
+        _cards[_index] = _cards[_index].copyWithReview(
+          reviewed: false,
+          reviewAgain: true,
+        );
+      });
+      return true;
+    } catch (_) {
+      if (mounted) {
+        showAppSnackBar(kRepasoSaveErrorMessage);
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _markBusy = false);
+    }
   }
 
   @override
@@ -205,11 +252,17 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Pregunta ${_index + 1} de $total',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Pregunta ${_index + 1} de $total',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      RepasoReviewStatusChip(state: _currentReviewUi),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   LinearProgressIndicator(
@@ -314,19 +367,29 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
                     alignment: WrapAlignment.end,
                     children: [
                       BookifiGhostButton(
-                        label: 'Seguir pendiente',
+                        label: _currentReviewUi == RepasoReviewUiState.reviewAgain
+                            ? '✓ Revisar de nuevo'
+                            : 'Seguir pendiente',
                         compact: true,
-                        onPressed: () {
-                          _onRepasar?.call();
-                          if (mounted) context.pop();
-                        },
+                        loading: _markBusy,
+                        onPressed: _markBusy
+                            ? null
+                            : () async {
+                                final ok = await _markCurrentPending();
+                                if (ok) _onRepasar?.call();
+                              },
                       ),
                       BookifiPrimaryButton(
-                        label: 'Marcar revisado',
-                        onPressed: () {
-                          _onReviewed?.call();
-                          if (mounted) context.pop();
-                        },
+                        label: _currentReviewUi == RepasoReviewUiState.reviewed
+                            ? '✓ Revisada'
+                            : 'Marcar revisado',
+                        loading: _markBusy,
+                        onPressed: _markBusy
+                            ? null
+                            : () async {
+                                final ok = await _markCurrentReviewed();
+                                if (ok) _onReviewed?.call();
+                              },
                       ),
                     ],
                   ),

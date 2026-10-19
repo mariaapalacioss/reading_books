@@ -184,6 +184,8 @@ class RepasoFlashcard {
     this.chapterTitle,
     this.pageNumber,
     this.studyCardId,
+    this.reviewed = false,
+    this.reviewAgain = false,
   });
 
   final String question;
@@ -195,6 +197,22 @@ class RepasoFlashcard {
 
   /// Fila `study_cards` persistida (kind qa); repaso no regenera si existe.
   final String? studyCardId;
+  final bool reviewed;
+  final bool reviewAgain;
+
+  RepasoFlashcard copyWithReview({bool? reviewed, bool? reviewAgain}) {
+    return RepasoFlashcard(
+      question: question,
+      answer: answer,
+      sourceType: sourceType,
+      bookTitle: bookTitle,
+      chapterTitle: chapterTitle,
+      pageNumber: pageNumber,
+      studyCardId: studyCardId,
+      reviewed: reviewed ?? this.reviewed,
+      reviewAgain: reviewAgain ?? this.reviewAgain,
+    );
+  }
 }
 
 class RepasoCounts {

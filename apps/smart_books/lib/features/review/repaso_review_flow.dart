@@ -392,23 +392,10 @@ Future<void> _startQaSession(
     entry: entry,
     bookId: entry.bookId,
     cards: cards,
-    onReviewed: () async {
-      for (final row in selected) {
-        final id = row['id']?.toString();
-        if (id != null) {
-          await repo.patchStudyCard(id, {
-            'reviewed': true,
-            'review_again': false,
-          });
-        }
-      }
+    onReviewed: () {
       onReviewedLegacy?.call();
     },
-    onRepasar: () async {
-      for (final row in selected) {
-        final id = row['id']?.toString();
-        if (id != null) await repo.patchStudyCard(id, {'review_again': true});
-      }
+    onRepasar: () {
       onRepasarLegacy?.call();
     },
   );

@@ -27,6 +27,7 @@ import '../assist/assist_panel.dart';
 import '../assist/assist_sheet.dart';
 import '../review/repaso_feedback.dart';
 import '../review/repaso_qa_store.dart';
+import '../review/repaso_save_ui.dart';
 import '../shared/bookifi_ui.dart';
 import 'book_context_bar.dart';
 import 'pdf_interactive_page.dart';
@@ -386,18 +387,26 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       rects: rects.map((r) => r.toJson()).toList(),
     );
     final title = quote.length > 72 ? '${quote.substring(0, 69)}…' : quote;
-    await repo.insertStudyCard({
-      'book_id': book.id,
-      'user_id': userId,
-      'chapter_id': chapterId,
-      'page_number': _page,
-      'kind': 'capture',
-      'source': 'capture',
-      'title': title.isEmpty ? 'Resaltado p. $_page' : title,
-      'body': quote,
-      'quote': quote,
-      'context_question': repasoSourceKeyFragmentSet(book.id, [hl.id]),
-    });
+    final contextQuestion = repasoSourceKeyFragmentSet(book.id, [hl.id]);
+    final existing = await findStudyCardForRepasoSave(
+      repo,
+      bookId: book.id,
+      contextQuestion: contextQuestion,
+    );
+    if (existing == null) {
+      await repo.insertStudyCard({
+        'book_id': book.id,
+        'user_id': userId,
+        'chapter_id': chapterId,
+        'page_number': _page,
+        'kind': 'capture',
+        'source': 'capture',
+        'title': title.isEmpty ? 'Resaltado p. $_page' : title,
+        'body': quote,
+        'quote': quote,
+        'context_question': contextQuestion,
+      });
+    }
     if (!mounted) return;
     setState(() => _highlights = [..._highlights, hl]);
     _finalizeSelectionUi();

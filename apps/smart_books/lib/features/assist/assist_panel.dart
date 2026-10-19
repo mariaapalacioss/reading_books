@@ -24,6 +24,7 @@ import '../../services/book_assist_service.dart';
 import '../review/repaso_feedback.dart';
 import '../review/repaso_qa_store.dart';
 import '../review/repaso_review_flow.dart';
+import '../review/repaso_save_ui.dart';
 import '../reader/selection_crop_preview.dart';
 import '../shared/bookifi_ui.dart';
 import '../shared/markdown_body.dart' show SmartMarkdown;
@@ -87,18 +88,105 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
   StudyScope? _activeStudyScope;
   StudyScope? _cachedFragmentScope;
   String _fragmentScopeCacheKey = '';
+  final _repasoSaveStates = <String, RepasoSaveUiState>{};
+  String? _cachedSaveContextQuestion;
 
   @override
   void initState() {
     super.initState();
     _syncRangeFieldsToPage(widget.page);
     _loadHistory();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _warmChatGptPlan());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _warmChatGptPlan();
+      _refreshRepasoSaveStates();
+    });
     if (widget.quote != null && widget.quote!.length > 8) {
       _input.text = widget.quote!;
     }
     if (widget.autoExplain) {
       WidgetsBinding.instance.addPostFrameCallback((_) => explainSelection());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AssistPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.quote != oldWidget.quote &&
+        widget.quote != null &&
+        widget.quote!.length > 8) {
+      _input.text = widget.quote!;
+    }
+    if (widget.page != oldWidget.page &&
+        _pageStudyMode == _PageStudyMode.pageRange &&
+        _rangeStartCtrl.text == '${oldWidget.page}' &&
+        _rangeEndCtrl.text == '${oldWidget.page}') {
+      _syncRangeFieldsToPage(widget.page);
+    }
+    if (oldWidget.page != widget.page ||
+        oldWidget.quote != widget.quote ||
+        oldWidget.book.id != widget.book.id) {
+      _repasoSaveStates.clear();
+      _cachedSaveContextQuestion = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _refreshRepasoSaveStates());
+    }
+  }
+
+  String _repasoSaveKey(AssistMode mode, String contextQuestion) =>
+      '${mode.name}|$contextQuestion';
+
+  RepasoSaveUiState _saveStateFor(AssistMode mode) {
+    final ctx = _cachedSaveContextQuestion;
+    if (ctx == null) return RepasoSaveUiState.ready;
+    return _repasoSaveStates[_repasoSaveKey(mode, ctx)] ??
+        RepasoSaveUiState.ready;
+  }
+
+  Future<String> _contextQuestionForSave() async {
+    final scope = _activeStudyScope ?? await _resolveStudyScope();
+    if (scope != null && scope.isValidSource) {
+      return repasoSourceKeyForStudyScope(scope);
+    }
+    if (widget.quote != null && widget.quote!.trim().length >= 8) {
+      return repasoSourceKeyFragment(
+        widget.book.id,
+        widget.page,
+        widget.quote!,
+      );
+    }
+    return repasoSourceKeyPage(widget.book.id, widget.page);
+  }
+
+  Future<void> _refreshRepasoSaveStates() async {
+    final userId = ref.read(supabaseClientProvider).auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final ctx = await _contextQuestionForSave();
+      _cachedSaveContextQuestion = ctx;
+      final repo = ref.read(booksRepositoryProvider);
+      final updates = <String, RepasoSaveUiState>{};
+      for (final mode in AssistMode.values) {
+        final hasText = switch (mode) {
+          AssistMode.chat =>
+            _messages.any((m) => !m.user && m.text.trim().isNotEmpty),
+          _ =>
+            (_storedResponses[mode]?.trim().isNotEmpty ?? false) ||
+                (_activeMode == mode && _modeResponse.trim().isNotEmpty),
+        };
+        if (!hasText) continue;
+        final existing = await findStudyCardForRepasoSave(
+          repo,
+          bookId: widget.book.id,
+          contextQuestion: ctx,
+          assistMode: mode.name,
+        );
+        updates[_repasoSaveKey(mode, ctx)] = existing != null
+            ? RepasoSaveUiState.saved
+            : RepasoSaveUiState.ready;
+      }
+      if (!mounted) return;
+      setState(() => _repasoSaveStates.addAll(updates));
+    } catch (_) {
+      // Estado de guardado es UX; errores van en el intento de guardar.
     }
   }
 
@@ -274,22 +362,6 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
     return flat.length > 72 ? '${flat.substring(0, 72)}…' : flat;
   }
 
-  @override
-  void didUpdateWidget(covariant AssistPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.quote != oldWidget.quote &&
-        widget.quote != null &&
-        widget.quote!.length > 8) {
-      _input.text = widget.quote!;
-    }
-    if (widget.page != oldWidget.page &&
-        _pageStudyMode == _PageStudyMode.pageRange &&
-        _rangeStartCtrl.text == '${oldWidget.page}' &&
-        _rangeEndCtrl.text == '${oldWidget.page}') {
-      _syncRangeFieldsToPage(widget.page);
-    }
-  }
-
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('chat_${widget.book.id}');
@@ -442,33 +514,53 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
       setState(() => _error = _friendlyError(e.toString()));
     } finally {
       setState(() => _streaming = false);
+      _refreshRepasoSaveStates();
     }
   }
 
-  Future<void> _saveStudy() async {
+  Future<void> _saveStudy({AssistMode? modeOverride, String? textOverride}) async {
+    final mode = modeOverride ?? _activeMode ?? AssistMode.chat;
     final userId = ref.read(supabaseClientProvider).auth.currentUser?.id;
-    final text =
+    final text = textOverride ??
         _lastAssistText ??
-        _messages
-            .where((m) => !m.user && m.text.isNotEmpty)
-            .map((m) => m.text)
-            .lastOrNull;
-    if (userId == null || text == null || text.isEmpty) {
+        (mode == AssistMode.chat
+            ? _messages
+                .where((m) => !m.user && m.text.isNotEmpty)
+                .map((m) => m.text)
+                .lastOrNull
+            : _storedResponses[mode]) ??
+        (mode == _activeMode ? _modeResponse : null);
+    if (userId == null || text == null || text.trim().isEmpty) {
       if (mounted) {
         showAppSnackBar('No hay contenido de la IA para guardar todavía.');
       }
       return;
     }
     final ch = _chapter;
+    String? saveKey;
     try {
-      final scope = _activeStudyScope ?? await _resolveStudyScope();
-      final contextQuestion = scope != null && scope.isValidSource
-          ? repasoSourceKeyForStudyScope(scope)
-          : (widget.quote != null && widget.quote!.trim().length >= 8)
-          ? repasoSourceKeyFragment(widget.book.id, widget.page, widget.quote!)
-          : repasoSourceKeyPage(widget.book.id, widget.page);
+      final contextQuestion = await _contextQuestionForSave();
+      _cachedSaveContextQuestion = contextQuestion;
+      final key = _repasoSaveKey(mode, contextQuestion);
+      saveKey = key;
+      if (_repasoSaveStates[key] == RepasoSaveUiState.saved) return;
 
-      await ref.read(booksRepositoryProvider).insertStudyCard({
+      setState(() => _repasoSaveStates[key] = RepasoSaveUiState.saving);
+
+      final repo = ref.read(booksRepositoryProvider);
+      final existing = await findStudyCardForRepasoSave(
+        repo,
+        bookId: widget.book.id,
+        contextQuestion: contextQuestion,
+        assistMode: mode.name,
+      );
+      if (existing != null) {
+        if (!mounted) return;
+        setState(() => _repasoSaveStates[key] = RepasoSaveUiState.saved);
+        return;
+      }
+
+      await repo.insertStudyCard({
         'book_id': widget.book.id,
         'user_id': userId,
         'chapter_id': ch?.id,
@@ -476,20 +568,24 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
         'kind': 'note',
         'source': 'assist',
         'title': _saveTitleForMode(
-          _activeMode,
+          mode,
           ch?.title,
           _assistContentLanguage(text),
         ),
         'body': text,
-        'assist_mode': _activeMode?.name ?? 'chat',
+        'assist_mode': mode.name,
         'quote': widget.quote,
         'context_question': contextQuestion,
       });
       if (!mounted) return;
+      setState(() => _repasoSaveStates[key] = RepasoSaveUiState.saved);
       notifyRepasoSaved(ref);
     } catch (e) {
       if (mounted) {
-        showAppSnackBar(_friendlyError(e.toString()));
+        if (saveKey != null) {
+          setState(() => _repasoSaveStates[saveKey!] = RepasoSaveUiState.error);
+        }
+        showAppSnackBar(kRepasoSaveErrorMessage);
       }
     }
   }
@@ -499,6 +595,7 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
       _tab = tab;
       _activeStudyScope = null;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshRepasoSaveStates());
   }
 
   ContentLanguage _assistContentLanguage(String text) {
@@ -844,22 +941,21 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
                 _activeMode != mode &&
                 (_storedResponses[mode]?.isNotEmpty ?? false)) ...[
               const SizedBox(height: 10),
-              BookifiGhostButton(
-                label: 'Guardar para repaso',
-                onPressed: () {
-                  _lastAssistText = _storedResponses[mode];
-                  _activeMode = mode;
-                  _saveStudy();
-                },
+              RepasoSaveButton(
+                state: _saveStateFor(mode),
+                onPressed: () => _saveStudy(
+                  modeOverride: mode,
+                  textOverride: _storedResponses[mode],
+                ),
               ),
             ],
             if (!_streaming &&
                 _activeMode == mode &&
                 _modeResponse.isNotEmpty) ...[
               const SizedBox(height: 10),
-              BookifiGhostButton(
-                label: 'Guardar para repaso',
-                onPressed: _saveStudy,
+              RepasoSaveButton(
+                state: _saveStateFor(mode),
+                onPressed: () => _saveStudy(modeOverride: mode),
               ),
             ],
             if ((mode == AssistMode.summary ||
@@ -1247,11 +1343,19 @@ class AssistPanelState extends ConsumerState<AssistPanel> {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           MIconBox(
-            icon: MargenLucide.review,
-            accent: AppTokens.purple,
+            icon: _saveStateFor(AssistMode.chat) == RepasoSaveUiState.saved
+                ? MargenLucide.checkCircle
+                : MargenLucide.review,
+            accent: _saveStateFor(AssistMode.chat) == RepasoSaveUiState.saved
+                ? const Color(0xFF22C55E)
+                : AppTokens.purple,
             size: 38,
             iconSize: 18,
-            onTap: _streaming ? null : _saveStudy,
+            onTap: _streaming ||
+                    _saveStateFor(AssistMode.chat) == RepasoSaveUiState.saving ||
+                    _saveStateFor(AssistMode.chat) == RepasoSaveUiState.saved
+                ? null
+                : () => _saveStudy(modeOverride: AssistMode.chat),
           ),
           const SizedBox(width: 8),
           Expanded(

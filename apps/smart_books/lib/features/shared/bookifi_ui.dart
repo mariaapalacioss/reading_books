@@ -149,12 +149,14 @@ class BookifiGhostButton extends StatelessWidget {
     this.onPressed,
     this.danger = false,
     this.compact = false,
+    this.loading = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool danger;
   final bool compact;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -162,8 +164,9 @@ class BookifiGhostButton extends StatelessWidget {
     final color = danger
         ? AppTokens.danger
         : (isDark ? AppTokens.purple : AppTokens.purpleDeep);
+    final enabled = onPressed != null && !loading;
     return OutlinedButton(
-      onPressed: onPressed,
+      onPressed: enabled ? onPressed : null,
       style: OutlinedButton.styleFrom(
         foregroundColor: color,
         backgroundColor: isDark ? null : Colors.white,
@@ -182,7 +185,20 @@ class BookifiGhostButton extends StatelessWidget {
           fontSize: compact ? 12 : 13,
         ),
       ),
-      child: Text(label),
+      child: loading
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: compact ? 14 : 16,
+                  height: compact ? 14 : 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                ),
+                const SizedBox(width: 8),
+                Text(label),
+              ],
+            )
+          : Text(label),
     );
   }
 }

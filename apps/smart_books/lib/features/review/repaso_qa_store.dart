@@ -94,6 +94,8 @@ RepasoFlashcard flashcardFromQaRow(
         ? (row['page_number'] as num).toInt()
         : int.tryParse('${row['page_number']}'),
     studyCardId: row['id']?.toString(),
+    reviewed: row['reviewed'] == true,
+    reviewAgain: row['review_again'] == true,
   );
 }
 

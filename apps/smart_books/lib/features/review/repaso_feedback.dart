@@ -4,7 +4,7 @@ import '../../core/providers.dart';
 import '../../core/ui/app_snackbar.dart';
 
 /// Mensaje unificado al guardar contenido en Repaso.
-const kRepasoSavedSnackMessage = 'Se ha guardado el repaso.';
+const kRepasoSavedSnackMessage = 'Guardado en Repaso';
 
 const kRepasoQuestionsSavedSnackMessage =
     'Se ha guardado el repaso. Puedes verlo en la pestaña Repaso.';
