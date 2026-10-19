@@ -10,6 +10,7 @@ import '../../domain/region_select.dart';
 import '../../domain/rects.dart';
 import '../../services/pdf_page_render.dart';
 import '../../services/platform_ocr.dart';
+import 'reader_margin_note.dart';
 
 typedef PdfSelection = ({
   String quote,
@@ -31,6 +32,8 @@ class PdfInteractivePage extends StatefulWidget {
     required this.showAi,
     required this.onSelection,
     required this.onHighlightTap,
+    this.marginNotes = const [],
+    this.onMarginNoteTap,
     this.onRegionBusy,
     this.transformationController,
     this.searchMatchRects,
@@ -45,6 +48,8 @@ class PdfInteractivePage extends StatefulWidget {
   final bool showAi;
   final ValueChanged<PdfSelection?> onSelection;
   final ValueChanged<Highlight> onHighlightTap;
+  final List<ReaderMarginNote> marginNotes;
+  final ValueChanged<ReaderMarginNote>? onMarginNoteTap;
   final ValueChanged<bool>? onRegionBusy;
   final TransformationController? transformationController;
   final List<NormRect>? searchMatchRects;
@@ -178,6 +183,7 @@ class PdfInteractivePageState extends State<PdfInteractivePage> {
                       pageNumber: widget.pageNumber,
                     ),
                     if (widget.showAi) ..._highlightLayers(pageLayout),
+                    ..._marginNoteLayers(pageLayout),
                     ..._searchMatchLayers(pageLayout),
                     if (overlayRect != null)
                       _selectionLayer(overlayRect, pageLayout),
@@ -232,6 +238,39 @@ class PdfInteractivePageState extends State<PdfInteractivePage> {
         ),
       ),
     );
+  }
+
+  List<Widget> _marginNoteLayers(ReaderPdfLayout layout) {
+    final onTap = widget.onMarginNoteTap;
+    if (onTap == null || widget.marginNotes.isEmpty) return [];
+    return widget.marginNotes
+        .where((n) => n.pageNumber == widget.pageNumber && n.rects.isNotEmpty)
+        .map((note) {
+          var maxRight = 0.0;
+          var minTop = 1.0;
+          for (final r in note.rects) {
+            final box = layout.normRectToLocal(r);
+            if (box.right > maxRight) maxRight = box.right;
+            if (box.top < minTop) minTop = box.top;
+          }
+          return Positioned(
+            left: maxRight + 4,
+            top: minTop,
+            child: GestureDetector(
+              onTap: () => onTap(note),
+              child: Material(
+                elevation: 2,
+                borderRadius: BorderRadius.circular(6),
+                color: const Color(0xFFFFB020),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.sticky_note_2, size: 18, color: Colors.white),
+                ),
+              ),
+            ),
+          );
+        })
+        .toList();
   }
 
   List<Widget> _highlightLayers(ReaderPdfLayout layout) {

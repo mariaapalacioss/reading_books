@@ -115,11 +115,13 @@ List<BookMaterialItem> materialsFromStudyCards(
         id: id,
         kind: kind,
         title: c['title']?.toString() ?? 'Material',
-        preview: (c['quote']?.toString().isNotEmpty == true
-                ? c['quote']
-                : c['body'])
-            ?.toString() ??
-            '',
+        preview: kind == BookMaterialKind.note
+            ? (c['body']?.toString() ?? '')
+            : ((c['quote']?.toString().isNotEmpty == true
+                    ? c['quote']
+                    : c['body'])
+                ?.toString() ??
+                ''),
         pageNumber: page is num ? page.toInt() : int.tryParse('$page'),
         createdAt: DateTime.tryParse(c['created_at']?.toString() ?? ''),
         studyCardId: id,

@@ -12,6 +12,7 @@ import '../features/chatgpt/plan_api.dart';
 import '../features/review/repaso_models.dart';
 import '../features/review/repaso_qa_store.dart';
 import '../features/review/repaso_source_text.dart';
+import 'practice_mcq_metadata.dart';
 
 enum RepasoGenerateScope {
   currentPage,
@@ -286,6 +287,8 @@ class ReviewQuestionsService {
           ? null
           : quote.substring(0, math.min(quote.length, 2000));
 
+      final metadata = metadataFromAiCard(card, question, answer);
+
       rows.add({
         'book_id': bookId,
         'user_id': userId,
@@ -301,10 +304,13 @@ class ReviewQuestionsService {
         'assist_mode': kReviewQuestionsAssistMode,
         'reviewed': false,
         'review_again': false,
+        if (metadata != null) 'metadata': metadata,
       });
 
       if (rows.length >= safeRequestedCount) break;
     }
+
+    attachMultipleChoiceMetadataToRows(rows);
 
     if (rows.isEmpty) {
       return GeneratedReviewBatch(

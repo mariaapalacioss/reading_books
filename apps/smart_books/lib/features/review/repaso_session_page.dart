@@ -12,7 +12,10 @@ import '../shared/bookifi_ui.dart';
 import 'repaso_models.dart';
 import 'repaso_qa_store.dart';
 import 'repaso_questions_catalog.dart';
+import 'repaso_review_flow.dart';
+import 'repaso_review_state.dart';
 import 'repaso_save_ui.dart';
+import 'repaso_session_mcq.dart';
 import 'repaso_session_route.dart';
 
 class RepasoSessionPage extends ConsumerStatefulWidget {
@@ -43,6 +46,8 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
   var _showBack = false;
   var _loading = true;
   var _markBusy = false;
+  int? _mcqSelected;
+  var _mcqRevealed = false;
   String? _error;
 
   List<RepasoFlashcard> _cards = [];
@@ -110,21 +115,21 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
     return RepasoReviewUiState.pending;
   }
 
-  Future<bool> _markCurrentReviewed() async {
+  Future<bool> _patchReviewState(RepasoReviewUiState state) async {
     final id = _cards[_index].studyCardId;
     if (id == null) return false;
     setState(() => _markBusy = true);
     try {
-      await ref.read(booksRepositoryProvider).patchStudyCard(id, {
-        'reviewed': true,
-        'review_again': false,
-      });
+      await ref.read(booksRepositoryProvider).patchStudyCard(
+        id,
+        repasoReviewPatch(state),
+      );
       bumpRepasoReloadTick(ref);
       if (!mounted) return false;
       setState(() {
         _cards[_index] = _cards[_index].copyWithReview(
-          reviewed: true,
-          reviewAgain: false,
+          reviewed: state == RepasoReviewUiState.reviewed,
+          reviewAgain: state == RepasoReviewUiState.reviewAgain,
         );
       });
       return true;
@@ -138,32 +143,21 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
     }
   }
 
+  Future<bool> _markCurrentReviewed() async {
+    return _patchReviewState(RepasoReviewUiState.reviewed);
+  }
+
+  Future<bool> _markCurrentReviewAgain() async {
+    return _patchReviewState(RepasoReviewUiState.reviewAgain);
+  }
+
   Future<bool> _markCurrentPending() async {
-    final id = _cards[_index].studyCardId;
-    if (id == null) return false;
-    setState(() => _markBusy = true);
-    try {
-      await ref.read(booksRepositoryProvider).patchStudyCard(id, {
-        'review_again': true,
-        'reviewed': false,
-      });
-      bumpRepasoReloadTick(ref);
-      if (!mounted) return false;
-      setState(() {
-        _cards[_index] = _cards[_index].copyWithReview(
-          reviewed: false,
-          reviewAgain: true,
-        );
-      });
-      return true;
-    } catch (_) {
-      if (mounted) {
-        showAppSnackBar(kRepasoSaveErrorMessage);
-      }
-      return false;
-    } finally {
-      if (mounted) setState(() => _markBusy = false);
-    }
+    return _patchReviewState(RepasoReviewUiState.pending);
+  }
+
+  void _resetMcqState() {
+    _mcqSelected = null;
+    _mcqRevealed = false;
   }
 
   @override
@@ -194,6 +188,7 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
     final next = _index + delta;
     if (next < 0 || next >= _cards.length) return;
     _resetFlip();
+    _resetMcqState();
     setState(() => _index = next);
   }
 
@@ -274,42 +269,56 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: GestureDetector(
-                      onTap: _toggleFlip,
-                      child: AnimatedBuilder(
-                        animation: _flipCtrl,
-                        builder: (context, child) {
-                          final angle = _flipCtrl.value * math.pi;
-                          final isUnder = angle > math.pi / 2;
-                          return Transform(
-                            alignment: Alignment.center,
-                            transform: Matrix4.identity()
-                              ..setEntry(3, 2, 0.001)
-                              ..rotateY(angle),
-                            child: isUnder
-                                ? Transform(
-                                    alignment: Alignment.center,
-                                    transform: Matrix4.identity()
-                                      ..rotateY(math.pi),
-                                    child: RepasoSessionFace(
-                                      label: 'Respuesta',
-                                      text: card.answer,
-                                      accent: AppTokens.purple,
-                                      hint: 'Toca para volver a la pregunta',
-                                      source: card,
-                                    ),
-                                  )
-                                : RepasoSessionFace(
-                                    label: 'Pregunta',
-                                    text: card.question,
-                                    accent: AppTokens.cyan,
-                                    hint: 'Toca para ver la respuesta',
-                                    source: card,
-                                  ),
-                          );
-                        },
-                      ),
-                    ),
+                    child: card.isMultipleChoice
+                        ? SingleChildScrollView(
+                            child: RepasoSessionMcqCard(
+                              card: card,
+                              selectedIndex: _mcqSelected,
+                              revealed: _mcqRevealed,
+                              onSelect: (i) {
+                                setState(() {
+                                  _mcqSelected = i;
+                                  _mcqRevealed = true;
+                                });
+                              },
+                            ),
+                          )
+                        : GestureDetector(
+                            onTap: _toggleFlip,
+                            child: AnimatedBuilder(
+                              animation: _flipCtrl,
+                              builder: (context, child) {
+                                final angle = _flipCtrl.value * math.pi;
+                                final isUnder = angle > math.pi / 2;
+                                return Transform(
+                                  alignment: Alignment.center,
+                                  transform: Matrix4.identity()
+                                    ..setEntry(3, 2, 0.001)
+                                    ..rotateY(angle),
+                                  child: isUnder
+                                      ? Transform(
+                                          alignment: Alignment.center,
+                                          transform: Matrix4.identity()
+                                            ..rotateY(math.pi),
+                                          child: RepasoSessionFace(
+                                            label: 'Respuesta',
+                                            text: card.answer,
+                                            accent: AppTokens.purple,
+                                            hint: 'Toca para volver a la pregunta',
+                                            source: card,
+                                          ),
+                                        )
+                                      : RepasoSessionFace(
+                                          label: 'Pregunta',
+                                          text: card.question,
+                                          accent: AppTokens.cyan,
+                                          hint: 'Toca para ver la respuesta',
+                                          source: card,
+                                        ),
+                                );
+                              },
+                            ),
+                          ),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -367,15 +376,30 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
                     alignment: WrapAlignment.end,
                     children: [
                       BookifiGhostButton(
-                        label: _currentReviewUi == RepasoReviewUiState.reviewAgain
-                            ? '✓ Revisar de nuevo'
-                            : 'Seguir pendiente',
+                        label: _currentReviewUi == RepasoReviewUiState.pending
+                            ? '✓ Pendiente'
+                            : 'Pendiente',
                         compact: true,
                         loading: _markBusy,
-                        onPressed: _markBusy
+                        onPressed: _markBusy ||
+                                _currentReviewUi == RepasoReviewUiState.pending
                             ? null
                             : () async {
                                 final ok = await _markCurrentPending();
+                                if (ok) _onRepasar?.call();
+                              },
+                      ),
+                      BookifiGhostButton(
+                        label: _currentReviewUi == RepasoReviewUiState.reviewAgain
+                            ? '✓ Revisar de nuevo'
+                            : 'Revisar de nuevo',
+                        compact: true,
+                        loading: _markBusy,
+                        onPressed: _markBusy ||
+                                _currentReviewUi == RepasoReviewUiState.reviewAgain
+                            ? null
+                            : () async {
+                                final ok = await _markCurrentReviewAgain();
                                 if (ok) _onRepasar?.call();
                               },
                       ),
@@ -384,7 +408,8 @@ class _RepasoSessionPageState extends ConsumerState<RepasoSessionPage>
                             ? '✓ Revisada'
                             : 'Marcar revisado',
                         loading: _markBusy,
-                        onPressed: _markBusy
+                        onPressed: _markBusy ||
+                                _currentReviewUi == RepasoReviewUiState.reviewed
                             ? null
                             : () async {
                                 final ok = await _markCurrentReviewed();
@@ -570,6 +595,52 @@ Future<void> openRepasoSessionFromGroup(
     extra: RepasoSessionExtra(
       entry: group.toEntry(),
       bookId: group.bookId,
+      cards: cards,
+    ),
+  );
+}
+
+/// Sesión con todas las Q/A persistidas de un libro.
+Future<void> openRepasoSessionForBook(
+  BuildContext context,
+  WidgetRef ref,
+  Book book,
+) async {
+  final repo = ref.read(booksRepositoryProvider);
+  final rows = await loadAllPersistedQaRows(repo, [book]);
+  if (!context.mounted) return;
+  if (rows.isEmpty) {
+    showAppSnackBar(
+      'No hay preguntas guardadas para este libro. Genera preguntas desde Estudiar o Repaso.',
+    );
+    return;
+  }
+
+  final picked = await pickQuestionCount(
+    context,
+    savedAvailable: rows.length,
+  );
+  if (picked == null || !context.mounted) return;
+
+  final target = picked >= 9999 ? rows.length : picked;
+  final selected = selectQaForSession(rows, target);
+  if (selected.isEmpty) return;
+
+  final cards = flashcardsFromQaRows(selected, ReviewSourceType.tarjeta);
+  final entry = ReviewListEntry(
+    id: 'book-all-qa-${book.id}',
+    sourceType: ReviewSourceType.tarjeta,
+    bookId: book.id,
+    bookTitle: book.title,
+    title: 'Preguntas del libro',
+    excerpt: '${rows.length} preguntas guardadas',
+  );
+
+  await context.push<void>(
+    '/repaso/sesion',
+    extra: RepasoSessionExtra(
+      entry: entry,
+      bookId: book.id,
       cards: cards,
     ),
   );

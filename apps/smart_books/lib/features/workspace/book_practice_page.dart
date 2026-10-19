@@ -6,12 +6,15 @@ import '../../core/theme/app_tokens.dart';
 import '../../data/models/book.dart';
 import '../review/repaso_data.dart';
 import '../review/repaso_models.dart';
+import '../review/repaso_qa_store.dart';
 import '../review/repaso_review_card.dart';
-import '../review/repaso_review_flow.dart';
+import '../review/repaso_session_page.dart';
 import '../shared/bookifi_ui.dart';
 import 'book_progress.dart';
 import 'book_workspace_context_bar.dart';
 import 'book_workspace_nav.dart';
+import '../review/repaso_review_state.dart';
+import '../review/repaso_save_ui.dart';
 import 'practice_question_types.dart';
 
 class BookPracticePage extends ConsumerStatefulWidget {
@@ -73,8 +76,11 @@ class _BookPracticePageState extends ConsumerState<BookPracticePage> {
     }
   }
 
-  Future<void> _patchCard(String id, Map<String, dynamic> patch) async {
-    await ref.read(booksRepositoryProvider).patchStudyCard(id, patch);
+  Future<void> _patchCardReview(String id, RepasoReviewUiState state) async {
+    await ref.read(booksRepositoryProvider).patchStudyCard(
+      id,
+      repasoReviewPatch(state),
+    );
     bumpRepasoReloadTick(ref);
     await _load();
   }
@@ -126,17 +132,11 @@ class _BookPracticePageState extends ConsumerState<BookPracticePage> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: BookifiPrimaryButton(
               label: 'Empezar repaso del libro',
-              onPressed: _entries.isEmpty
+              onPressed: _progress == null || _progress!.questionsTotal == 0
                   ? null
                   : () async {
-                      await runRepasoReviewFlow(
-                        context,
-                        ref,
-                        entry: _entries.first,
-                        onReviewedLegacy: _load,
-                        onRepasarLegacy: _load,
-                        onRepasoDataChanged: _load,
-                      );
+                      await openRepasoSessionForBook(context, ref, book);
+                      if (mounted) await _load();
                     },
             ),
           ),
@@ -188,16 +188,16 @@ class _BookPracticePageState extends ConsumerState<BookPracticePage> {
                         child: RepasoReviewCard(
                           entry: entry,
                           onRepasoDataChanged: _load,
-                          onReviewed: entry.card != null
-                              ? () => _patchCard(
+                          onReviewed: entry.card != null && isPersistedQa(entry.card!)
+                              ? () => _patchCardReview(
                                     entry.card!['id'].toString(),
-                                    {'reviewed': true},
+                                    RepasoReviewUiState.reviewed,
                                   )
                               : null,
-                          onRepasar: entry.card != null
-                              ? () => _patchCard(
+                          onRepasar: entry.card != null && isPersistedQa(entry.card!)
+                              ? () => _patchCardReview(
                                     entry.card!['id'].toString(),
-                                    {'review_again': true},
+                                    RepasoReviewUiState.reviewAgain,
                                   )
                               : null,
                         ),

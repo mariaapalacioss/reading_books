@@ -1,6 +1,7 @@
 import '../../data/models/highlight.dart';
 import '../../data/repositories/books_repository.dart';
 import '../../domain/study_scope.dart';
+import '../workspace/practice_question_types.dart';
 import 'repaso_models.dart';
 
 const kReviewQuestionsAssistMode = 'reviewQuestions';
@@ -84,6 +85,16 @@ RepasoFlashcard flashcardFromQaRow(
   Map<String, dynamic> row,
   ReviewSourceType sourceType,
 ) {
+  final meta = row['metadata'];
+  final practice = PracticeQuestionPayload.fromMetadata(
+    meta is Map ? Map<String, dynamic>.from(meta) : null,
+  );
+  final practiceOrNull =
+      practice.format == PracticeQuestionFormat.multipleChoice &&
+          practice.options.length >= 2
+      ? practice
+      : null;
+
   return RepasoFlashcard(
     question: row['body']?.toString() ?? '',
     answer: row['back']?.toString() ?? '',
@@ -96,6 +107,7 @@ RepasoFlashcard flashcardFromQaRow(
     studyCardId: row['id']?.toString(),
     reviewed: row['reviewed'] == true,
     reviewAgain: row['review_again'] == true,
+    practice: practiceOrNull,
   );
 }
 

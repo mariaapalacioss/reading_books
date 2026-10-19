@@ -32,6 +32,8 @@ import '../shared/bookifi_ui.dart';
 import 'book_context_bar.dart';
 import 'pdf_interactive_page.dart';
 import 'reader_layout.dart';
+import 'reader_margin_note.dart';
+import 'reader_note_sheets.dart';
 import 'selection_crop_preview.dart';
 
 class ReaderPage extends ConsumerStatefulWidget {
@@ -61,6 +63,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   List<Chapter> _chapters = [];
   Set<int> _bookmarks = {};
   List<Highlight> _highlights = [];
+  List<ReaderMarginNote> _marginNotes = [];
   String _pageText = '';
   List<TextItem> _items = [];
   List<NormRect>? _searchMatchRects;
@@ -159,6 +162,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       final chapters = await repo.listChapters(widget.bookId);
       final marks = await repo.listBookmarks(widget.bookId);
       _highlights = await repo.listHighlights(widget.bookId);
+      await _reloadMarginNotes();
       final PdfDocument doc;
       if (book.isLocalStorage) {
         final bytes = await repo.downloadPdfBytes(book.storagePath);
@@ -366,6 +370,54 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
   }
 
+  String? _chapterIdForPage(int page) {
+    for (final ch in _chapters) {
+      if (page >= ch.startPage && page <= ch.endPage) return ch.id;
+    }
+    return null;
+  }
+
+  Future<void> _reloadMarginNotes() async {
+    final cards = await ref.read(booksRepositoryProvider).listStudyCards(
+      widget.bookId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _marginNotes = cards
+          .where(ReaderMarginNote.isMarginNoteRow)
+          .map(ReaderMarginNote.fromStudyCard)
+          .toList();
+    });
+  }
+
+  Future<void> _openAddNoteFromSelection(PdfSelection sel) async {
+    final book = _book;
+    if (book == null) return;
+    final ok = await showReaderAddNoteSheet(
+      context,
+      ref,
+      bookId: book.id,
+      pageNumber: _page,
+      selection: sel,
+      chapterId: _chapterIdForPage(_page),
+    );
+    if (ok) {
+      await _reloadMarginNotes();
+      _finalizeSelectionUi();
+    }
+  }
+
+  Future<void> _openMarginNote(ReaderMarginNote note) async {
+    await showReaderViewNoteSheet(
+      context,
+      ref,
+      note: note,
+      selectionForEdit: null,
+      chapterId: _chapterIdForPage(note.pageNumber),
+      onChanged: _reloadMarginNotes,
+    );
+  }
+
   Future<void> _createHighlight(String quote, List<NormRect> rects) async {
     final book = _book;
     final userId = ref.read(supabaseClientProvider).auth.currentUser?.id;
@@ -468,6 +520,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     },
                   ),
                   const SizedBox(height: 8),
+                  BookifiGhostButton(
+                    label: 'Añadir nota',
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await _openAddNoteFromSelection(sel);
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   BookifiPrimaryButton(
                     label: 'Explicar con IA',
                     icon: Icons.auto_awesome,
@@ -510,6 +570,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               onTap: () async {
                 Navigator.pop(ctx);
                 await _createHighlight(sel.quote, sel.rects);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.sticky_note_2_outlined),
+              title: const Text('Añadir nota'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _openAddNoteFromSelection(sel);
               },
             ),
             ListTile(
@@ -717,6 +785,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     SnackBar(content: Text(hl.explanationEs ?? hl.quote)),
                   );
                 },
+                marginNotes: _marginNotes,
+                onMarginNoteTap: _openMarginNote,
               ),
             ),
           ),

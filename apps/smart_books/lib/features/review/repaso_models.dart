@@ -1,4 +1,5 @@
 import '../../data/models/highlight.dart';
+import '../workspace/practice_question_types.dart';
 
 /// Origen unificado del ítem en el workspace Repaso.
 enum ReviewSourceType { resaltado, tarjeta, resumen, punto, fragmento }
@@ -186,6 +187,7 @@ class RepasoFlashcard {
     this.studyCardId,
     this.reviewed = false,
     this.reviewAgain = false,
+    this.practice,
   });
 
   final String question;
@@ -199,6 +201,11 @@ class RepasoFlashcard {
   final String? studyCardId;
   final bool reviewed;
   final bool reviewAgain;
+  final PracticeQuestionPayload? practice;
+
+  bool get isMultipleChoice =>
+      practice?.format == PracticeQuestionFormat.multipleChoice &&
+      (practice!.options.length >= 2);
 
   RepasoFlashcard copyWithReview({bool? reviewed, bool? reviewAgain}) {
     return RepasoFlashcard(
@@ -211,6 +218,7 @@ class RepasoFlashcard {
       studyCardId: studyCardId,
       reviewed: reviewed ?? this.reviewed,
       reviewAgain: reviewAgain ?? this.reviewAgain,
+      practice: practice,
     );
   }
 }

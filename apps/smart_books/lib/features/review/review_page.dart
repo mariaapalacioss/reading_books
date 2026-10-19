@@ -13,6 +13,9 @@ import 'repaso_generated_questions_page.dart';
 import 'repaso_models.dart';
 import 'repaso_session_page.dart';
 import 'repaso_review_card.dart';
+import 'repaso_review_state.dart';
+import 'repaso_save_ui.dart';
+import 'repaso_qa_store.dart';
 import 'repaso_source_text.dart';
 import 'repaso_theme.dart';
 
@@ -560,14 +563,20 @@ class _BookReviewSectionState extends ConsumerState<_BookReviewSection> {
     }
   }
 
-  Future<void> _patchCard(String id, Map<String, dynamic> patch) async {
-    await ref.read(booksRepositoryProvider).patchStudyCard(id, patch);
-
+  Future<void> _patchCardReview(String id, RepasoReviewUiState state) async {
+    await ref.read(booksRepositoryProvider).patchStudyCard(
+      id,
+      repasoReviewPatch(state),
+    );
+    bumpRepasoReloadTick(ref);
     await _load();
   }
 
-  Future<void> _patchHighlight(String id, Map<String, dynamic> patch) async {
-    await ref.read(booksRepositoryProvider).patchHighlight(id, patch);
+  Future<void> _patchHighlight(String id, RepasoReviewUiState state) async {
+    await ref.read(booksRepositoryProvider).patchHighlight(
+      id,
+      repasoReviewPatch(state),
+    );
 
     await _load();
   }
@@ -660,21 +669,32 @@ class _BookReviewSectionState extends ConsumerState<_BookReviewSection> {
     return RepasoReviewCard(
       entry: entry,
       onRepasoDataChanged: _load,
-      onReviewed: entry.card != null
-          ? () => _patchCard(entry.card!['id'].toString(), {'reviewed': true})
+      onReviewed: entry.card != null && isPersistedQa(entry.card!)
+          ? () => _patchCardReview(
+                entry.card!['id'].toString(),
+                RepasoReviewUiState.reviewed,
+              )
           : null,
-      onRepasar: entry.card != null
-          ? () =>
-                _patchCard(entry.card!['id'].toString(), {'review_again': true})
+      onRepasar: entry.card != null && isPersistedQa(entry.card!)
+          ? () => _patchCardReview(
+                entry.card!['id'].toString(),
+                RepasoReviewUiState.reviewAgain,
+              )
           : null,
       onDelete: entry.card != null
           ? () => _deleteCard(entry.card!['id'].toString())
           : null,
       onReviewedHighlight: entry.highlight != null
-          ? () => _patchHighlight(entry.highlight!.id, {'reviewed': true})
+          ? () => _patchHighlight(
+                entry.highlight!.id,
+                RepasoReviewUiState.reviewed,
+              )
           : null,
       onRepasarHighlight: entry.highlight != null
-          ? () => _patchHighlight(entry.highlight!.id, {'review_again': true})
+          ? () => _patchHighlight(
+                entry.highlight!.id,
+                RepasoReviewUiState.reviewAgain,
+              )
           : null,
     );
   }
