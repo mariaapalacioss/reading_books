@@ -302,7 +302,7 @@ grant all on all tables in schema public to authenticated;
 grant execute on function public.match_chunks(extensions.vector, uuid, integer) to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('books', 'books', false, 104857600, array['application/pdf'])
+values ('books', 'books', false, 524288000, array['application/pdf'])
 on conflict (id) do update
 set public = false,
     file_size_limit = excluded.file_size_limit,

@@ -92,7 +92,7 @@ export function formatFileSize(bytes: number) {
 
 export function maxCloudPdfBytes() {
   const mb = Number(import.meta.env.VITE_MAX_PDF_CLOUD_MB);
-  const limit = Number.isFinite(mb) && mb > 0 ? mb : 50;
+  const limit = Number.isFinite(mb) && mb > 0 ? mb : 500;
   return limit * 1024 * 1024;
 }
 
